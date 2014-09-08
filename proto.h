@@ -19,6 +19,10 @@ extern void GPIO_init();
 // memory.c:
 extern void MC_init();
 
+// uart.c:
+extern void Uart_init(int baud);
+extern void Uart_SendByte(char ch);
+
 /* lcd.c: */
 extern void LCD_Init();
 extern void LCD_EnvidOnOff(int onoff);

@@ -133,7 +133,7 @@ init_clock:
 		STR	R1,	[R0]
 
 		LDR	R0,	=CLKDIVN
-		MOV	R1,	#0x5 		@ FCLK:PCLK:HCLK=4:2:1
+		MOV	R1,	#0x5 		@ FCLK:HCLK:PCLK = 8:2:1
 		STR	R1,	[R0]
 
 		MRC	P15, 0, R0, C1, C0, 0		@ p159
