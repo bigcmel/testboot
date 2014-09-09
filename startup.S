@@ -86,8 +86,12 @@ Reset_Handler:
 		BL	init_stack
 
 @ Enter C
-	.EXTERN		__main
-		LDR	PC,	=__main
+	.EXTERN	__main
+		BL	__main
+
+		MOV	PC,	R0
+
+		B	.
 
 set_svc:
 		MRS	R0, 	CPSR

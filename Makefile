@@ -21,7 +21,7 @@ LIBPATH		= -lgcc -L $(ARM-TOOLS-PATH)/../lib/gcc/arm-none-linux-gnueabi/4.4.3	# 
 # This Program
 NANSLBOOT	= boot.bin
 NANSLBOOTELF	= boot.elf
-OBJS		= startup.o main.o clock.o gpio.o lcd.o uart.o
+OBJS		= startup.o main.o clock.o gpio.o lcd.o uart.o nand_flash.o
 DASMOUTPUT	= boot.bin.asm
 
 # All Phony Targets
@@ -66,4 +66,7 @@ gpio.o: gpio.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 uart.o: uart.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+nand_flash.o: nand_flash.c
 	$(CC) $(CFLAGS) -o $@ $<
