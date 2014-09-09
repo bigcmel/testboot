@@ -14,7 +14,7 @@ BYTE* __main()
   //  MC_init();
 
   int i;
-  char* ptr;
+  char* ptr = 0x33100000;
 
   GPIO_init();
 
@@ -29,10 +29,9 @@ BYTE* __main()
 
   NF_init();
 
-  Uart_SendString( (char*)NF_CheckId(), 32);
+  Uart_SendString( (char*)NF_CheckId(), 4);
   Uart_SendString( "\n" , 1);
 
-  /*
   if( NF_ReadPage(0, 0, ptr) )
     {
       Uart_SendString(ptr,100);
@@ -40,7 +39,7 @@ BYTE* __main()
     }
   else
     Uart_SendString("Read Fail!\n",11);
-  */
+
 
   return (BYTE*)LOADER_BASE_ADDR;
 }

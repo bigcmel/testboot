@@ -2,8 +2,8 @@
 /* nand_flash.c: nand_flash controller configure file for Samsung S3C2440      */
 /*******************************************************************************/
 
-/* 这里写的代码是以 K9F1208 型号的 Nand Flash 为目标的，若目标 Nand Flash 不为 K9F1208，则不应用本代码
-   K9F1208参数：存储空间为64M
+/* 这里写的代码是以 K9F2G08U0B 型号的 Nand Flash 为目标的，若目标 Nand Flash 不为 K9F1208，则不应用本代码
+   K9F1208参数：存储空间为256M
 */
 
 #include "global.h"
@@ -19,7 +19,7 @@
 #define NFMECCD1 (*(volatile WORD*)0x4E000018) // mian 区域寄存器
 #define NFSECCD (*(volatile WORD*)0x4E00001C) // spare 区域ECC寄存器
 #define NFSTAT (*(volatile WORD*)0x4E000020) // 状态寄存器
-#define NFESATA0 (*(volatile WORD*)0x4E000024) // ECC0 状态寄存器
+#define NFESTAT0 (*(volatile WORD*)0x4E000024) // ECC0 状态寄存器
 #define NFESTAT1 (*(volatile WORD*)0x4E000028) // ECC1 状态寄存器
 #define NFMECC0 (*(volatile WORD*)0x4E00002C) // main 区域 ECC0 状态寄存器
 #define NFMECC1 (*(volatile WORD*)0x4E000030) // main 区域 ECC1 状态寄存器
@@ -39,10 +39,10 @@ static int NF_TACLS; // 从 CLK/ALK 有效到 nWE/nOE 的时间
 static int NF_TWRPH0; // nWE/nOE 的有效时间
 static int NF_TWRPH1; // 从释放 CLE/ALE 到 nWE/nOE 不活动的时间
 
-#define NF_BLOCKNUM 4096 // 共有4096个块
-#define NF_PAGEPBLOCK 32 // 每个块中的页数
-#define NF_MAINSIZE 512 // 一个页中的 main 区域大小
-#define NF_SPARESIZE 16 // 一个页中的 spare 区域大小
+#define NF_BLOCKNUM 2068 // 共有4096个块
+#define NF_PAGEPBLOCK 64 // 每个块中的页数
+#define NF_MAINSIZE 2048 // 一个页中的 main 区域大小
+#define NF_SPARESIZE 64 // 一个页中的 spare 区域大小
 #define NF_PAGESIZE (NF_MAINSIZE + NF_SPARESIZE) // 页大小（字节单位）
 
 
@@ -50,7 +50,7 @@ static int NF_TWRPH1; // 从释放 CLE/ALE 到 nWE/nOE 不活动的时间
 
 #define NF_CMD_RST 0xFF // 复位
 #define NF_CMD_RD1 0x00 // 读一个页的main的第一部分，本质上是将 nand flash 内部指针指向 mian 的第一部分的首部
-#define NF_CMD_RD2 0x01 // 读一个页的main的第二部分，本质上是将 nand flash 内部指针指向 mian 的第二部分的首部
+#define NF_CMD_RD2 0x30 // 读一个页的main的第二部分，本质上是将 nand flash 内部指针指向 mian 的第二部分的首部
 #define NF_CMD_RDS 0x50 // 读一个页的spare部分，本质上是将 nand flash 内部指针指向 spare 部分的首部
 #define NF_CMD_RDD 0x90 // 读芯片的ID号
 #define NF_CMD_PROG 0x80 // 进入写操作模式
@@ -120,9 +120,9 @@ static void NF_Reset()
 void NF_init()
 {
   //得到 TACLK，TWRPH0，TWRPH1
-  NF_TACLS = 1;
-  NF_TWRPH0 = 0;
-  NF_TWRPH1 = 0;
+  NF_TACLS = 0x0;
+  NF_TWRPH0 = 0x3;
+  NF_TWRPH1 = 0x0;
 
   NFCONF = (NF_TACLS << 12) | (NF_TWRPH0 << 8) | (NF_TWRPH1 << 4) | (0 << 0); // 第0位清零，即8位IO
   NFCONT = NFCONT_Val;
@@ -179,14 +179,17 @@ WORD NF_ReadPage(WORD block,WORD page,BYTE* buffer)
   NF_CLEAR_RB(); // 清 RnB 信号
   NF_CMD( NF_CMD_RD1 ); // 从本页的上半部分开始读
   
-  NF_ADDR( 0 ); // 从本页的第一个列（字节）开始读
-  NF_ADDR( blockPage & 0xff ); // 这三行代码指明页号
-  NF_ADDR( ( blockPage >> 8 ) & 0xff );
-  NF_ADDR( ( blockPage >> 16 ) & 0xff );
+  NF_ADDR( 0x00 ); // 从本页的第一个列（字节）开始读，列地址 A0～A7
+  NF_ADDR( 0x00 ); // 列地址 A8～A11
+  NF_ADDR( blockPage & 0xff ); // 这三行代码指明页号，行地址 A12～A19
+  NF_ADDR( ( blockPage >> 8 ) & 0xff ); // 行地址 A20～A27
+  NF_ADDR( ( blockPage >> 16 ) & 0xff ); // 行地址 A28
+
+  NF_CMD( NF_CMD_RD2 ); // 页读命令周期2
 
   NF_WAIT_RB();
 
-  // 往本页的 main 区里写入 buffer 里的内容
+  // 往 buffer 里写入本页的 main 区里的内容
   for(i=0 ; i<NF_MAINSIZE ; i++)
     {
       buffer[i] = NF_RDDATA8();
@@ -201,6 +204,10 @@ WORD NF_ReadPage(WORD block,WORD page,BYTE* buffer)
       ECCbuf[i] = NF_RDDATA8();
     }
 
+  // 校验主区域
+  NFMECCD0 = ((ECCbuf[1] & 0xff) << 16) | (ECCbuf[0] & 0xff);
+  NFMECCD1 = ((ECCbuf[3] & 0xff) << 16) | (ECCbuf[2] & 0xff);
+
   NF_SpareECCLock(); // 锁定 spare 区域的 ECC 校验码
 
   // 读 spare 区域的第5，第6个字节，即 spare 区域的 ECC 校验码部分
@@ -209,24 +216,18 @@ WORD NF_ReadPage(WORD block,WORD page,BYTE* buffer)
       ECCbuf[i] = NF_RDDATA8();
     }
 
+  // 校验 spare 区域
+  NFSECCD = ((ECCbuf[5] & 0xff) << 16) | (ECCbuf[4] & 0xff);
   
+  NF_nFCE_H(); // 取消片选
+
   /* 下面就是验证 ECC 校验码了 */
 
-  if(( ECCbuf[0] == (NFMECCD0 & 0xff)) && 
-     ( ECCbuf[1] == ((NFMECCD0 >> 16) & 0xff)) &&
-     ( ECCbuf[2] == (NFMECCD1 & 0xff)) &&
-     ( ECCbuf[3] == ((NFMECCD1 >> 16) & 0xff)) &&
-     ( ECCbuf[4] == (NFSECCD & 0xff)) &&
-     ( ECCbuf[5] == ((NFSECCD >> 16) & 0xff)))
-    { // ECC 校验全部成功
-      NF_nFCE_H();
-      return 1;
-    }
+  if(( NFESTAT0 & 0xf ) == 0x0)
+      return 1; // ECC 校验成功
   else
-    { // ECC 校验不成功
-      NF_nFCE_H();
-      return 0;
-    }
+      return 0; // ECC 校验不成功
+
 }
 
 
