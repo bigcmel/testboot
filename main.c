@@ -2,6 +2,8 @@
 
 #define LOADER_BASE_ADDR 0x33000000 // loader.bin 加载到内存中的地址
 
+void print_nand_id();
+
 BYTE* __main()
 {
 
@@ -14,25 +16,35 @@ BYTE* __main()
   //  MC_init();
 
   int i;
-  char* ptr = 0x33100000;
+  BYTE* ptr;
+  BYTE* str;
+
+  ptr = (BYTE*)0x33100011;
+  str = "HELLO";
 
   GPIO_init();
 
   Uart_init(115200);
   Uart_SendString("Boot!\n",6);
-
+  
+/*
   LCD_init();
   LCD_EnvidOnOff(1);
   LCD_ClearScr(0x343434);
+*/
 
   //  while(1){}
 
+  /*
   NF_init();
 
-  Uart_SendString( (char*)NF_CheckId(), 4);
-  Uart_SendString( "\n" , 1);
+  print_nand_id();
 
-  if( NF_ReadPage(0, 0, ptr) )
+
+  if( NF_WritePage(0, 1, str) == 0 )
+    Uart_SendString("Write Fail!\n",12);
+
+  if( NF_ReadPage(0, 1, ptr) )
     {
       Uart_SendString(ptr,100);
       Uart_SendString("\n",1);
@@ -40,6 +52,9 @@ BYTE* __main()
   else
     Uart_SendString("Read Fail!\n",11);
 
+  Uart_SendString(ptr,2048);
+  Uart_SendString("\n",1);
+  */
 
   return (BYTE*)LOADER_BASE_ADDR;
 }
@@ -48,3 +63,24 @@ BYTE* __main()
 void raise()
 {}
 
+void print_nand_id()
+{
+  HWORD id;
+  BYTE maker, device;
+
+  /*
+  device = (BYTE)id;
+  maker = (BYTE)(id >> 8);
+  Uart_SendByte(maker);
+  Uart_SendByte(device);
+  Uart_SendByte('\n');
+  */
+
+  id = NF_CheckId();
+  device = (BYTE)id;
+  maker = (BYTE)(id >> 8);
+
+  Uart_SendByte(maker);
+  Uart_SendByte(device);
+  Uart_SendByte('\n');
+}

@@ -14,6 +14,7 @@
 #define NFCONT (*(volatile WORD*)0x4E000004) // 控制寄存器
 #define NFCMMD (*(volatile WORD*)0x4E000008) // 命令寄存器
 #define NFADDR (*(volatile WORD*)0x4E00000C) // 地址寄存器
+#define NFDATA (*(volatile WORD*)0x4E000010) // 数据寄存器
 #define NFDATA8 (*(volatile BYTE*)0x4E000010) // 数据寄存器,字节访问，即一次只读一个字节
 #define NFMECCD0 (*(volatile WORD*)0x4E000014) // main 区域寄存器
 #define NFMECCD1 (*(volatile WORD*)0x4E000018) // mian 区域寄存器
@@ -35,11 +36,11 @@
 
 /* 相关参数变量的声明 */
 
-static int NF_TACLS; // 从 CLK/ALK 有效到 nWE/nOE 的时间
-static int NF_TWRPH0; // nWE/nOE 的有效时间
-static int NF_TWRPH1; // 从释放 CLE/ALE 到 nWE/nOE 不活动的时间
+#define NF_TACLS 7 // 从 CLK/ALK 有效到 nWE/nOE 的时间
+#define NF_TWRPH0 7 // nWE/nOE 的有效时间
+#define NF_TWRPH1 7 // 从释放 CLE/ALE 到 nWE/nOE 不活动的时间
 
-#define NF_BLOCKNUM 2068 // 共有4096个块
+#define NF_BLOCKNUM 2048 // 共有2048个块
 #define NF_PAGEPBLOCK 64 // 每个块中的页数
 #define NF_MAINSIZE 2048 // 一个页中的 main 区域大小
 #define NF_SPARESIZE 64 // 一个页中的 spare 区域大小
@@ -77,8 +78,14 @@ static int NF_TWRPH1; // 从释放 CLE/ALE 到 nWE/nOE 不活动的时间
 // 初始化 ECC
 #define NF_RSTECC() {NFCONT |= (1<<4);}
 
+// 读数据，一个字
+#define NF_RDDATA() (NFDATA)
+
 // 读数据,一个字节
 #define NF_RDDATA8() (NFDATA8)
+
+// 写数据，一个字
+#define NF_WRDATA(data) {NFDATA = data;}
 
 // 写数据，一个字节
 #define NF_WRDATA8(data) {NFDATA8 = data;}
@@ -119,15 +126,10 @@ static void NF_Reset()
 
 void NF_init()
 {
-  //得到 TACLK，TWRPH0，TWRPH1
-  NF_TACLS = 0x0;
-  NF_TWRPH0 = 0x3;
-  NF_TWRPH1 = 0x0;
-
   NFCONF = (NF_TACLS << 12) | (NF_TWRPH0 << 8) | (NF_TWRPH1 << 4) | (0 << 0); // 第0位清零，即8位IO
-  NFCONT = NFCONT_Val;
-  NF_RSTECC(); //复位 ECC
-  NF_Reset(); //复位 Nand Flash 外部芯片
+  NFCONT = (0<<13)|(0<<12)|(0<<10)|(0<<9)|(0<<8)|(1<<6)|(1<<5)|(1<<4)|(1<<1)|(1<<0);
+  //  NF_RSTECC(); //复位 ECC
+  //  NF_Reset(); //复位 Nand Flash 外部芯片
 }
 
 
@@ -154,8 +156,8 @@ WORD NF_CheckId()
   NF_CMD( NF_CMD_RDD );
   NF_ADDR( 0x0 ); // 指定地址 0x0， 芯片手册要求
   NF_WAIT_RB();
-  id = NF_RDDATA8() << 8; // 厂商 ID
-  id |= NF_RDDATA8(); // 设备 ID
+  id = NF_RDDATA() << 8; // 厂商 ID
+  id |= NF_RDDATA(); // 设备 ID
   NF_nFCE_H();
 
   return id;
@@ -169,10 +171,14 @@ WORD NF_CheckId()
 WORD NF_ReadPage(WORD block,WORD page,BYTE* buffer)
 {
   int i;
-  WORD blockPage = (block << 5) + page;
-  BYTE* bufPt = buffer;
+  WORD blockPage;
+  BYTE* bufPt;
   BYTE ECCbuf[6];
+  WORD Mecc, Secc;
 
+  bufPt = buffer;
+  blockPage = (block * NF_PAGEPBLOCK) + page;
+  
   NF_RSTECC(); // 复位 ECC
   NF_MainECCUnlock(); // 解锁本页 main 区域的 ECC 校验，允许生成 ECC 校验码
   NF_nFCE_L();
@@ -192,32 +198,27 @@ WORD NF_ReadPage(WORD block,WORD page,BYTE* buffer)
   // 往 buffer 里写入本页的 main 区里的内容
   for(i=0 ; i<NF_MAINSIZE ; i++)
     {
-      buffer[i] = NF_RDDATA8();
+      *bufPt++ = NF_RDDATA8();
+      //      Uart_SendByte(*bufPt);
     }
 
   NF_MainECCLock(); // 锁定 main 区域的 ECC 校验码
   NF_SpareECCUnlock(); // 解锁本页 spare 区域的 ECC 校验  
 
   // 读 spare 区域的前4个字节，即 main 区域的 ECC 校验码部分
-  for(i=0 ; i<4 ; i++)
-    {
-      ECCbuf[i] = NF_RDDATA8();
-    }
+  Mecc = NF_RDDATA();
 
   // 校验主区域
-  NFMECCD0 = ((ECCbuf[1] & 0xff) << 16) | (ECCbuf[0] & 0xff);
-  NFMECCD1 = ((ECCbuf[3] & 0xff) << 16) | (ECCbuf[2] & 0xff);
+  NFMECCD0 = ((Mecc & 0xff00) << 8) | (Mecc & 0xff);
+  NFMECCD1 = ((Mecc & 0xff000000) >> 8) | ((Mecc & 0xff0000) >> 16);
 
   NF_SpareECCLock(); // 锁定 spare 区域的 ECC 校验码
 
   // 读 spare 区域的第5，第6个字节，即 spare 区域的 ECC 校验码部分
-  for(i=4 ; i<6 ; i++)
-    {
-      ECCbuf[i] = NF_RDDATA8();
-    }
+  Secc = NF_RDDATA();
 
   // 校验 spare 区域
-  NFSECCD = ((ECCbuf[5] & 0xff) << 16) | (ECCbuf[4] & 0xff);
+  NFSECCD = ((Secc & 0xff00) << 8) | (Secc & 0xff);
   
   NF_nFCE_H(); // 取消片选
 
@@ -264,4 +265,73 @@ WORD NF_IsBadBlock(WORD block)
   
   // markLen 个字节都是 0x00 就是坏块
   return 1;
+}
+
+/* Function: 以页为单位写 Nand Flash
+   参数：block 块号；page 页号；buffer 源缓冲区 
+   返回值：0 读错误；1 读成功 */
+
+WORD NF_WritePage(WORD block,WORD page,BYTE* buffer)
+{
+  int i;
+  WORD blockPage;
+  BYTE* bufPt;
+  BYTE ECCbuf[6];
+  WORD Mecc, Secc;
+  BYTE temp;
+
+  bufPt = buffer;
+  blockPage = (block * NF_PAGEPBLOCK) + page;
+  
+  temp = NF_IsBadBlock( block );
+  if(temp == 0x33)
+    return 0;
+
+  NF_RSTECC(); // 复位 ECC
+  NF_MainECCUnlock(); // 解锁本页 main 区域的 ECC 校验，允许生成 ECC 校验码
+  NF_nFCE_L();
+  NF_CLEAR_RB(); // 清 RnB 信号
+  NF_CMD( NF_CMD_PROG ); // 从本页的上半部分开始读
+  
+  NF_ADDR( 0x00 ); // 从本页的第一个列（字节）开始读，列地址 A0～A7
+  NF_ADDR( 0x00 ); // 列地址 A8～A11
+  NF_ADDR( blockPage & 0xff ); // 这三行代码指明页号，行地址 A12～A19
+  NF_ADDR( ( blockPage >> 8 ) & 0xff ); // 行地址 A20～A27
+  NF_ADDR( ( blockPage >> 16 ) & 0xff ); // 行地址 A28
+
+  // 往本页的 main 区里写入 buffer 里的内容
+  for(i=0 ; i<NF_MAINSIZE ; i++)
+    {
+      //      Uart_SendByte(*bufPt);
+      NF_WRDATA8(*bufPt++);
+    }
+
+  NF_MainECCLock(); // 锁定 main 区域的 ECC 校验码
+  Mecc = NFMECC0;
+  ECCbuf[0] = (BYTE)(Mecc & 0xff);
+  ECCbuf[1] = (BYTE)((Mecc >> 8) & 0xff);
+  ECCbuf[2] = (BYTE)((Mecc >> 16) & 0xff);
+  ECCbuf[3] = (BYTE)((Mecc >> 24) & 0xff);
+ 
+  NF_SpareECCUnlock(); // 解锁本页 spare 区域的 ECC 校验  
+  for(i=0 ; i<4; i++)
+    NF_WRDATA8(ECCbuf[i]);
+  
+  NF_SpareECCLock(); // 锁定 spare 区域的 ECC 校验码
+  Secc = NFSECC;
+  ECCbuf[4] = (BYTE)(Secc & 0xff);
+  ECCbuf[5] = (BYTE)((Secc >> 8) & 0xff);
+  for(i=4 ; i<6; i++)
+    NF_WRDATA8(ECCbuf[i]);
+
+
+  NF_CMD( NF_CMD_PROG_END ); // 页读命令周期2
+
+  NF_WAIT_RB();
+  NF_nFCE_H(); // 取消片选
+  
+
+
+  return 1;
+
 }

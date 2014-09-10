@@ -21,6 +21,7 @@ extern void MC_init();
 
 // uart.c:
 extern void Uart_init(int baud);
+extern void Uart_SendByte(char ch);
 extern int Uart_SendString(const char* str, unsigned int len);
 
 /* lcd.c: */
@@ -40,6 +41,6 @@ extern void NF_GetBlockPageInfo(WORD* nf_blocknum, WORD* nf_pagepblock,
 extern WORD NF_CheckId(); // 获取厂商ID和设备ID
 extern WORD NF_ReadPage(WORD block,WORD page,BYTE* buffer);
 extern WORD NF_IsBadBlock(WORD block); // 判断一个块是不是坏块
-
+extern WORD NF_WritePage(WORD block,WORD page,BYTE* buffer);
 
 #endif
