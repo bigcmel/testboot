@@ -26,12 +26,6 @@ BYTE* __main()
 
   Uart_init(115200);
   Uart_SendString("Boot!\n",6);
-  
-/*
-  LCD_init();
-  LCD_EnvidOnOff(1);
-  LCD_ClearScr(0x343434);
-*/
 
   //  while(1){}
 
