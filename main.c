@@ -27,7 +27,7 @@ BYTE* __main()
   Uart_init(115200);
   Uart_SendString("Boot!\n",6);
 
-  while(1){}
+  //  while(1){}
 
   /*
   NF_init();
