@@ -1,6 +1,6 @@
 #include "proto.h"
 
-#define LOADER_BASE_ADDR 0x33000000 // loader.bin 加载到内存中的地址
+#define LOADER_BASE_ADDR 0x31000000 // loader.bin 加载到内存中的地址
 
 void print_nand_id();
 
@@ -19,7 +19,7 @@ BYTE* __main()
   BYTE* ptr;
   BYTE* str;
 
-  ptr = (BYTE*)0x33100011;
+  ptr = (BYTE*)0x31100011;
   str = "HELLO";
 
   GPIO_init();
