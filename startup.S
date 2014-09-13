@@ -175,7 +175,7 @@ mem_data:
 	.LONG	0x00000030
 	
 init_stack:
-		LDR	SP,	=0x34000000
+		LDR	SP,	=0x32000000
 		MOV	PC,	LR
 	
 	
