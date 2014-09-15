@@ -89,7 +89,7 @@ Reset_Handler:
 	.EXTERN	__main
 		BL	__main
 
-		MOV	PC,	R0
+		MOV	PC,	R0 	@ 跳近 loader
 
 		B	.
 
