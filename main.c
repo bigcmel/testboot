@@ -2,25 +2,27 @@
 
 #define LOADER_BASE_ADDR 0x31000000 // loader.bin 加载到内存中的地址
 
+#define LOADER_BLOCK_BASE 0 // loader.bin 在 nand flash 中所处的块号
+#define LOADER_PAGE_BASE 2 // loader.bin 在 nand flash 中所处的页号
+#define LOADER_BLOCK_NUM 1 // loader.bin 在 nand 中所占俄块数
+#define LOADER_PAGE_NUM 3 // loader.bin 所占的页数
+
 void print_nand_id();
 
 BYTE* __main()
 {
 
-  /* 各种初始化 */
-
-  //  WT_init();
-  
-  //  CLK_init();
-
-  //  MC_init();
-
-  int i;
+  BYTE* loader_base;
   BYTE* ptr;
-  BYTE* str;
 
-  ptr = (BYTE*)0x31100011;
-  str = "HELLO";
+  WORD i;
+
+  // 获取 nand_flash 的块数，页数，页大小等等信息
+  WORD nf_blocknum, nf_pagepblock, nf_mainsize, nf_sparesize;
+  
+  loader_base = (BYTE*)LOADER_BASE_ADDR;
+  ptr = loader_base;
+
 
   GPIO_init();
 
@@ -29,26 +31,23 @@ BYTE* __main()
 
   //  while(1){}
 
-  /*
   NF_init();
 
-  print_nand_id();
-
-
-  if( NF_WritePage(0, 1, str) == 0 )
-    Uart_SendString("Write Fail!\n",12);
-
-  if( NF_ReadPage(0, 1, ptr) )
-    {
-      Uart_SendString(ptr,100);
-      Uart_SendString("\n",1);
-    }
-  else
-    Uart_SendString("Read Fail!\n",11);
-
-  Uart_SendString(ptr,2048);
-  Uart_SendString("\n",1);
+  /* 将 nand_flash 的 0 号块的 2～4 号页的内容（即存储了 loader.bin 的一段程序）
+   复制到内存的 LOADER_BASE_ADDR 处
   */
+
+  // 获取 nand_flash 的块数，页数，页大小等等信息
+
+  NF_GetBlockPageInfo(&nf_blocknum, &nf_pagepblock, &nf_mainsize, &nf_sparesize);
+
+  for(i=0 ; i<LOADER_PAGE_NUM ; i++)
+    {
+      if( NF_ReadPage(LOADER_BLOCK_BASE, LOADER_PAGE_BASE+i, ptr) )
+	ptr += nf_mainsize;
+      else
+	Uart_SendString("Read Fail!\n",11);
+    }
 
   return (BYTE*)LOADER_BASE_ADDR;
 }
